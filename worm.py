@@ -61,3 +61,63 @@ def index_pdf(file_path):
         collection.add(documents=docs_batch, metadatas=metas_batch, ids=ids_batch)
         
     print(f"Vectors added (total {chunk_id} chunks)")
+
+def make_link(book, page):
+    abs_path = os.path.join(BOOKS_DIR, book)
+    url = f"file://{abs_path}#page={page}"
+    return f"\033]8;;{url}\033\\\033[4;36m{page}\033[0m\033]8;;\033\\"
+
+def format_page_ranges(book, pages_set):
+    pages = sorted(list(pages_set))
+    if not pages: return ""
+    ranges = []
+    start = prev = pages[0]
+    
+    for page in pages[1:]:
+        if page == prev + 1:
+            prev = page
+        else:
+            if start != prev:
+                ranges.append(f"{make_link(book, start)}-{prev}")
+            else:
+                ranges.append(make_link(book, start))
+            start = prev = page
+            
+    if start != prev:
+        ranges.append(f"{make_link(book, start)}-{prev}")
+    else:
+        ranges.append(make_link(book, start))
+        
+    return ", ".join(ranges)
+
+def search_answer(query):
+    collection = get_collection()
+    results = collection.query(query_texts=[query], n_results=5)
+    
+    found_pages = {}
+    for meta in results["metadatas"][0]:
+        book = meta["book"]
+        if book not in found_pages:
+            found_pages[book] = set()
+        found_pages[book].add(meta["page"])
+        
+    print(f"\nQuery: '{query}'\n")
+    if not found_pages:
+        print("Nothing found.")
+    else:
+        for book, pages in found_pages.items():
+            print(f"File: {book}")
+            print(f"   Pages: {format_page_ranges(book, pages)}\n")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  worm <query>         - Search the library")
+        print("  worm --index <file>  - Index a PDF file")
+        sys.exit(1)
+        
+    if sys.argv[1] == "--index":
+        index_pdf(sys.argv[2])
+    else:
+        query = " ".join(sys.argv[1:])
+        search_answer(query)
